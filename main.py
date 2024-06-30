@@ -33,6 +33,8 @@ DEFAULT_LOCATIONS = {
     # Add more locations as needed
 }
 
+check_count = 0
+
 # Helper Functions
 def get_weather_forecast(location_key):
     url = f"http://dataservice.accuweather.com/forecasts/v1/hourly/1hour/{location_key}?apikey={ACCUWEATHER_API_KEY}"
@@ -55,7 +57,9 @@ intents.message_content = True
 bot = discord.Bot(intents=intents)
 
 @tasks.loop(hours=1)  # Check every hour
-async def check_rain(location_name="Quận 7", location_key=None, check_count=1):  # Added parameters
+async def check_rain(location_name="Quận 7", location_key=None):
+    global check_count  # Access the global check_count variable
+
     channel = bot.get_channel(RAIN_ALARM_CHANNEL_ID)
     if not channel:
         print(f"Error: Could not find channel with ID {RAIN_ALARM_CHANNEL_ID}")
@@ -75,19 +79,22 @@ async def check_rain(location_name="Quận 7", location_key=None, check_count=1)
     else:
         print(f"Error: Location '{location_name}' not found in DEFAULT_LOCATIONS.")
 
-    # Stop the task if it has run for the specified number of times
-    if check_count > 1:
-        check_rain.change_interval(count=check_count - 1)  # Decrement the counter
-    else:
+    # Stop the task if it has run for 10 times
+    if check_count >= 10:
         check_rain.cancel()  # Stop the task
+    else:
+        check_count += 1  # Increment the counter
 
 # Slash Command for Rain Check
 @bot.command(name="rain", description="Check for rain at a specific location for 10 hours")
 async def rain(ctx, location_name: str):
+    global check_count  # Reset the counter when the command is invoked
+    check_count = 1
+
     location_key = DEFAULT_LOCATIONS.get(location_name)
     if location_key:
         await ctx.respond(f"Checking for rain at {location_name} for the next 10 hours...")
-        check_rain.change_interval(hours=1, count=10)  # Check every hour for 10 times
+        check_rain.change_interval(hours=1)  # Check every hour
         check_rain.start(location_name, location_key)  # Start the task with the specified location
     else:
         await ctx.respond(f"Location '{location_name}' not found.")
